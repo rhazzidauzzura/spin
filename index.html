@@ -114,8 +114,8 @@
     <div id="form-section">
       <h2>Daftar Spin</h2>
       <p>Isi data untuk mengambil hadiah Anda</p>
-      <input type="text" id="fullname" placeholder="Nama Lengkap">
-      <input type="tel" id="phone" placeholder="Nomor Telepon">
+      <input type="text" id="fullname" placeholder="Nama Lengkap" style="text-transform:uppercase" required>
+      <input type="tel" id="phone" placeholder="Nomor Telepon" style="text-transform:uppercase" required>
       <button id="btn-submit" onclick="submitData()">Daftar & Ambil Hadiah</button>
     </div>
 
@@ -137,45 +137,52 @@
     let prizes = [];
     let colors = ["#ff7675", "#fdcb6e", "#55efc4", "#81ecec", "#a29bfe", "#fab1a0", "#74b9ff", "#ff9ff3"];
     let currentRotation = 0;
-    const API_BASE = "https://api.example.com"; // GANTI DENGAN URL API ANDA
+    const API_BASE = "https://api-officeless-dev.mekari.com/28043"; // GANTI DENGAN URL API ANDA
 
     // 1. Submit Data & Ambil List Hadiah dari API
     async function submitData() {
       const name = document.getElementById('fullname').value;
       const phone = document.getElementById('phone').value;
 
-      if (!name || !phone) return alert("Lengkapi data!");
+      if (!name) return alert("Lengkapi data Full Name!");
+      if (!phone) return alert("Lengkapi data Phone Number!");
+
 
       document.getElementById('btn-submit').disabled = true;
       document.getElementById('btn-submit').innerText = "Loading...";
 
       try {
         // HIT API 1: Registrasi User & Ambil Master Hadiah
-        const response = await fetch(`${API_BASE}/register-and-prizes`, {
+        const response = await fetch(`${API_BASE}/submit-peserta`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fullname: name, phone: phone })
+          body: JSON.stringify({ fullname: name, phone: phone, spin: false })
         });
         const data = await response.json();
-
+        if (data.error) throw new Error(data.message || "API Error");
         // Simulasi jika API sukses (Ganti dengan data dari API Anda)
-        userData = { id: data.userId || Date.now(), name: name };
-        prizes = data.prizes || ["Diskon 10%", "Zonk", "Kaos", "Voucher", "E-Wallet", "Zonk"];
-
+        const responseHadiah = await fetch(`${API_BASE}/master-hadiah`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          // body: JSON.stringify({ fullname: name, phone: phone })
+        });
+        prizes = await responseHadiah.json();
+        userData = { fullname: data.data.fullname, phone: data.data.phone };
         showWheel();
       } catch (err) {
         console.error("Gagal hit API:", err);
         // Fallback untuk testing jika API belum ada
-        alert("API tidak ditemukan. Menjalankan mode demo.");
-        prizes = ["Hadiah A", "Hadiah B", "Zonk", "Hadiah C", "Zonk", "Hadiah D"];
-        showWheel();
+        alert(err.message);
+        window.location.reload();
+        // prizes = ["Hadiah A", "Hadiah B", "Zonk", "Hadiah C", "Zonk", "Hadiah D"];
+        // showWheel();
       }
     }
 
     function showWheel() {
       document.getElementById('form-section').style.display = 'none';
       document.getElementById('wheel-section').style.display = 'block';
-      document.getElementById('user-greeting').innerText = `Halo, ${userData.name}!`;
+      document.getElementById('user-greeting').innerText = `Halo, ${userData.fullname}!`;
       drawWheel();
     }
 
@@ -183,56 +190,107 @@
       const canvas = document.getElementById('canvas');
       const ctx = canvas.getContext('2d');
       const sliceAngle = (2 * Math.PI) / prizes.length;
-
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       prizes.forEach((prize, i) => {
+        const startAngle = i * sliceAngle;
+        const endAngle = (i + 1) * sliceAngle;
+        // Gambar Potongan
         ctx.beginPath();
         ctx.fillStyle = colors[i % colors.length];
         ctx.moveTo(150, 150);
-        ctx.arc(150, 150, 150, i * sliceAngle, (i + 1) * sliceAngle);
+        ctx.arc(150, 150, 150, startAngle, endAngle);
         ctx.fill();
-
+        ctx.stroke();
+        // Gambar Teks
         ctx.save();
         ctx.translate(150, 150);
-        ctx.rotate(i * sliceAngle + sliceAngle / 2);
+        // Putar ke tengah-tengah potongan
+        ctx.rotate(startAngle + sliceAngle / 2);
         ctx.fillStyle = "white";
-        ctx.font = "bold 12px Arial";
-        ctx.fillText(prize.substring(0, 12), 60, 5);
+        ctx.font = "bold 14px Arial";
+        ctx.textAlign = "right";
+        ctx.fillText(prize.name, 130, 10);
         ctx.restore();
       });
     }
 
-    function spinWheel() {
+    async function spinWheel() {
       const btn = document.getElementById('btn-spin');
       btn.disabled = true;
       document.getElementById('status-msg').innerText = "Memutar...";
 
-      const extraDegree = Math.floor(Math.random() * 360);
-      const totalDegree = 2880 + extraDegree; // 8 putaran penuh + random
-      currentRotation += totalDegree;
+      try {
+        // HIT API 1: Update status spin ke server
+        const response = await fetch(`${API_BASE}/submit-peserta`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fullname: userData.fullname, phone: userData.phone, spin: true })
+        });
+        const data = await response.json();
+        if (data.error) throw new Error(data.message || "API Error");
 
-      document.getElementById('canvas').style.transform = `rotate(${currentRotation}deg)`;
+        // --- 1. Penentuan Pemenang (99% Zonk) ---
+        let winningIndex;
+        const probability = Math.random() * 100;
+        const zonkIndices = prizes.map((p, i) => p.name.toLowerCase().includes("zonk") ? i : null).filter(i => i !== null);
+        const prizeIndices = prizes.map((p, i) => !p.name.toLowerCase().includes("zonk") ? i : null).filter(i => i !== null);
 
-      setTimeout(() => {
-        const actualDeg = currentRotation % 360;
+        // Probabilitas 1% Menang (Probability <= 1)
+        if (probability <= 1 && prizeIndices.length > 0) {
+          winningIndex = prizeIndices[Math.floor(Math.random() * prizeIndices.length)];
+        } else {
+          winningIndex = zonkIndices[Math.floor(Math.random() * zonkIndices.length)];
+        }
+
+        // --- 2. Hitung Derajat Putaran ---
         const sliceSize = 360 / prizes.length;
-        const winningIndex = Math.floor(((360 - actualDeg + 270) % 360) / sliceSize);
-        const finalPrize = prizes[winningIndex];
+        const angleOfWinningSlice = winningIndex * sliceSize;
+        const extraRounds = 1800; // 5 putaran penuh
+        const targetRotation = extraRounds + 270 - angleOfWinningSlice - (sliceSize / 2);
 
-        finishGame(finalPrize);
-      }, 5000);
+        currentRotation += targetRotation;
+
+        // --- 3. Animasi ---
+        const canvas = document.getElementById('canvas');
+        canvas.style.transition = "transform 5s cubic-bezier(0.2, 0, 0.2, 1)";
+        canvas.style.transform = `rotate(${currentRotation}deg)`;
+
+        // --- 4. Hasil & Animasi Pesan ---
+        setTimeout(() => {
+          const finalPrize = prizes[winningIndex];
+          const statusMsg = document.getElementById('status-msg');
+
+          // CEK APAKAH ZONK ATAU BUKAN
+          if (finalPrize.name.toLowerCase().includes("zonk")) {
+            // Tampilan Jika GAGAL/ZONK
+            statusMsg.innerHTML = `<span style="color:#e74c3c; font-size:1.5rem; font-weight:bold;">YAAH, GAGAL! ❌</span><br>Maaf, Anda dapat ${finalPrize.name}. Coba lagi nanti ya!`;
+          } else {
+            // Tampilan Jika BERHASIL
+            statusMsg.innerHTML = `<span style="color:#27ae60; font-size:1.5rem; font-weight:bold;">SELAMAT! 🎉</span><br>Anda memenangkan <b>${finalPrize.name}</b>`;
+          }
+
+          finishGame(finalPrize, userData);
+
+          setTimeout(() => {
+            window.location.reload();
+          }, 6000); // Beri waktu user baca pesan sebelum reload
+        }, 5000);
+
+      } catch (err) {
+        alert("Terjadi kesalahan: " + err.message);
+        btn.disabled = false;
+      }
     }
 
     // 2. Hit API setelah spin selesai
-    async function finishGame(prize) {
-      document.getElementById('status-msg').innerHTML = `Selamat!<br><span class="prize-win">${prize}</span>`;
-
+    async function finishGame(prize, userData) {
       try {
         // HIT API 2: Update Hasil Hadiah User
         await fetch(`${API_BASE}/save-result`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            userId: userData.id,
+            fullname: userData.fullname,
             prizeReceived: prize,
             timestamp: new Date().toISOString()
           })
