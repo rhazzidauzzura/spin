@@ -156,7 +156,7 @@
         const response = await fetch(`${API_BASE}/submit-peserta`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fullname: name, phone: phone, spin: false })
+          body: JSON.stringify({ fullname: name, phone: phone, spin: 'NO' })
         });
         const data = await response.json();
         if (data.error) throw new Error(data.message || "API Error");
@@ -224,7 +224,7 @@
         const response = await fetch(`${API_BASE}/submit-peserta`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fullname: userData.fullname, phone: userData.phone, spin: true })
+          body: JSON.stringify({ fullname: userData.fullname, phone: userData.phone, spin: 'YES' })
         });
         const data = await response.json();
         if (data.error) throw new Error(data.message || "API Error");
