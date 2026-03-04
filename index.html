@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pro Spin & Win</title>
+  <style>
+    :root {
+      --primary: #6c5ce7;
+      --secondary: #a29bfe;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background: #dfe6e9;
+    }
+
+    .card {
+      background: white;
+      padding: 2.5rem;
+      border-radius: 20px;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border: 2px solid #eee;
+      border-radius: 8px;
+      box-sizing: border-box;
+      transition: 0.3s;
+    }
+
+    input:focus {
+      border-color: var(--primary);
+      outline: none;
+    }
+
+    button {
+      width: 100%;
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 1rem;
+      margin-top: 10px;
+    }
+
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    #wheel-section {
+      display: none;
+    }
+
+    .wheel-wrapper {
+      position: relative;
+      width: 300px;
+      height: 300px;
+      margin: 20px auto;
+    }
+
+    #canvas {
+      border-radius: 50%;
+      border: 8px solid #333;
+      transition: transform 5s cubic-bezier(0.15, 0, 0.15, 1);
+    }
+
+    .arrow {
+      position: absolute;
+      top: -15px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 15px solid transparent;
+      border-right: 15px solid transparent;
+      border-top: 30px solid #d63031;
+      z-index: 10;
+    }
+
+    #status-msg {
+      margin-top: 15px;
+      font-style: italic;
+      color: #636e72;
+    }
+
+    .prize-win {
+      color: #27ae60;
+      font-size: 1.4rem;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="card">
+    <div id="form-section">
+      <h2>Daftar Spin</h2>
+      <p>Isi data untuk mengambil hadiah Anda</p>
+      <input type="text" id="fullname" placeholder="Nama Lengkap">
+      <input type="tel" id="phone" placeholder="Nomor Telepon">
+      <button id="btn-submit" onclick="submitData()">Daftar & Ambil Hadiah</button>
+    </div>
+
+    <div id="wheel-section">
+      <h3 id="user-greeting"></h3>
+      <div class="wheel-wrapper">
+        <div class="arrow"></div>
+        <canvas id="canvas" width="300" height="300"></canvas>
+      </div>
+      <button id="btn-spin" onclick="spinWheel()">MULAI SPIN!</button>
+      <div id="result-container">
+        <p id="status-msg">Silahkan tekan tombol di atas</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let userData = {};
+    let prizes = [];
+    let colors = ["#ff7675", "#fdcb6e", "#55efc4", "#81ecec", "#a29bfe", "#fab1a0", "#74b9ff", "#ff9ff3"];
+    let currentRotation = 0;
+    const API_BASE = "https://api.example.com"; // GANTI DENGAN URL API ANDA
+
+    // 1. Submit Data & Ambil List Hadiah dari API
+    async function submitData() {
+      const name = document.getElementById('fullname').value;
+      const phone = document.getElementById('phone').value;
+
+      if (!name || !phone) return alert("Lengkapi data!");
+
+      document.getElementById('btn-submit').disabled = true;
+      document.getElementById('btn-submit').innerText = "Loading...";
+
+      try {
+        // HIT API 1: Registrasi User & Ambil Master Hadiah
+        const response = await fetch(`${API_BASE}/register-and-prizes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fullname: name, phone: phone })
+        });
+        const data = await response.json();
+
+        // Simulasi jika API sukses (Ganti dengan data dari API Anda)
+        userData = { id: data.userId || Date.now(), name: name };
+        prizes = data.prizes || ["Diskon 10%", "Zonk", "Kaos", "Voucher", "E-Wallet", "Zonk"];
+
+        showWheel();
+      } catch (err) {
+        console.error("Gagal hit API:", err);
+        // Fallback untuk testing jika API belum ada
+        alert("API tidak ditemukan. Menjalankan mode demo.");
+        prizes = ["Hadiah A", "Hadiah B", "Zonk", "Hadiah C", "Zonk", "Hadiah D"];
+        showWheel();
+      }
+    }
+
+    function showWheel() {
+      document.getElementById('form-section').style.display = 'none';
+      document.getElementById('wheel-section').style.display = 'block';
+      document.getElementById('user-greeting').innerText = `Halo, ${userData.name}!`;
+      drawWheel();
+    }
+
+    function drawWheel() {
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      const sliceAngle = (2 * Math.PI) / prizes.length;
+
+      prizes.forEach((prize, i) => {
+        ctx.beginPath();
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.moveTo(150, 150);
+        ctx.arc(150, 150, 150, i * sliceAngle, (i + 1) * sliceAngle);
+        ctx.fill();
+
+        ctx.save();
+        ctx.translate(150, 150);
+        ctx.rotate(i * sliceAngle + sliceAngle / 2);
+        ctx.fillStyle = "white";
+        ctx.font = "bold 12px Arial";
+        ctx.fillText(prize.substring(0, 12), 60, 5);
+        ctx.restore();
+      });
+    }
+
+    function spinWheel() {
+      const btn = document.getElementById('btn-spin');
+      btn.disabled = true;
+      document.getElementById('status-msg').innerText = "Memutar...";
+
+      const extraDegree = Math.floor(Math.random() * 360);
+      const totalDegree = 2880 + extraDegree; // 8 putaran penuh + random
+      currentRotation += totalDegree;
+
+      document.getElementById('canvas').style.transform = `rotate(${currentRotation}deg)`;
+
+      setTimeout(() => {
+        const actualDeg = currentRotation % 360;
+        const sliceSize = 360 / prizes.length;
+        const winningIndex = Math.floor(((360 - actualDeg + 270) % 360) / sliceSize);
+        const finalPrize = prizes[winningIndex];
+
+        finishGame(finalPrize);
+      }, 5000);
+    }
+
+    // 2. Hit API setelah spin selesai
+    async function finishGame(prize) {
+      document.getElementById('status-msg').innerHTML = `Selamat!<br><span class="prize-win">${prize}</span>`;
+
+      try {
+        // HIT API 2: Update Hasil Hadiah User
+        await fetch(`${API_BASE}/save-result`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: userData.id,
+            prizeReceived: prize,
+            timestamp: new Date().toISOString()
+          })
+        });
+        console.log("Hasil berhasil disimpan ke database.");
+      } catch (err) {
+        console.error("Gagal menyimpan hasil:", err);
+      }
+    }
+  </script>
+
+</body>
+
+</html>
